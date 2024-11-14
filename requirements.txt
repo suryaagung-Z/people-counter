@@ -3,3 +3,4 @@ opencv-python==4.10.0.84
 pillow==11.0.0   
 pip==24.2     
 tk==0.1.0
+ultralytics==8.3.31
