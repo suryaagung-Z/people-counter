@@ -8,36 +8,35 @@ import time
 # Memuat model YOLOv8
 model = YOLO("Model/yolov8n.pt")
 
-# memuat nama-nama kelas COCO
+# Memuat nama-nama kelas COCO
 with open("Model/COCO_labels.txt", "r") as f:
     class_names = f.read().split("\n")
 
-# Inisialisasi jumlah orang secara global
+# Inisialisasi variabel global
 count = 0
+display_count = 0
+last_update_time = time.time()
+
+# Fungsi untuk memperbarui tampilan jumlah orang setiap 5 detik
 def update_count():
+    global display_count, count, last_update_time
+    current_time = time.time()
+    if current_time - last_update_time >= 5:  # Interval 5 detik
+        display_count = count  # Perbarui jumlah orang yang ditampilkan
+        last_update_time = current_time  # Simpan waktu pembaruan terakhir
+    threading.Timer(5, update_count).start()  # Jalankan kembali setelah 5 detik
+
+def display_video_feed(video, is_camera):
     global count
-    text = f"{count} orang"
-    print(text)
-    threading.Timer(5, update_count).start()
-
-def select_camera():
-    global video, camera_thread
-    stop_flag.clear()
-    stop_button.pack_forget()
-    video = cv2.VideoCapture(0)
-    camera_thread = threading.Thread(target=display_camera, args=(video,))
-    camera_thread.start()
-    stop_button.pack()
-
-def display_camera(video):
-    global count  # Pastikan menggunakan variabel global count
     if not video.isOpened():
-        print("Error membuka kamera")
+        print("Error membuka sumber video/kamera.")
+        return
 
+    # Resolusi frame output
     frame_width = int(video.get(3))
     frame_height = int(video.get(4))
     out = cv2.VideoWriter(
-        "resources/Camera_result.mp4",
+        "resources/Camera_result.mp4" if is_camera else "resources/Video_result.mp4",
         cv2.VideoWriter_fourcc(*"mp4v"),
         20,
         (frame_width, frame_height),
@@ -60,23 +59,20 @@ def display_camera(video):
         resized_frame = cv2.resize(frame, new_size)
 
         results = model(resized_frame)
-        count = 0
+        local_count = 0
 
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 class_id = box.cls
                 label = class_names[int(class_id)]
-                confidence = box.conf
-
                 if label == "person":
-                    count += 1
-                    label_text = f"{label}: {float(confidence):.2f}"
+                    local_count += 1
                     cv2.rectangle(resized_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     y = y1 - 15 if y1 > 15 else y1 + 15
                     cv2.putText(
                         resized_frame,
-                        label_text,
+                        f"{label}: {float(box.conf):.2f}",
                         (x1, y),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.5,
@@ -84,7 +80,10 @@ def display_camera(video):
                         2,
                     )
 
-        text = f"{count} orang"
+        count = local_count  # Perbarui penghitung global
+
+        # Tambahkan teks jumlah orang di tengah frame
+        text = f"{display_count} orang"
         font_scale = 1
         font = cv2.FONT_HERSHEY_SIMPLEX
         (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, 2)
@@ -106,131 +105,31 @@ def display_camera(video):
         if key == ord("q"):
             break
 
-    cv2.destroyAllWindows()
     video.release()
     out.release()
+    cv2.destroyAllWindows()
 
-def select_video():
-    global video, video_thread
-    # Mereset flag berhenti
+def select_camera():
+    global stop_flag
     stop_flag.clear()
-    # Membuka dialog file untuk memilih video
-    file_path = filedialog.askopenfilename()
-    # Memuat video yang dipilih
-    video = cv2.VideoCapture(file_path)
-    # Memulai thread terpisah untuk menampilkan frame video
-    video_thread = threading.Thread(target=display_video, args=(video,))
+    stop_button.pack_forget()
+    video = cv2.VideoCapture(0)  # Buka kamera
+    video_thread = threading.Thread(target=display_video_feed, args=(video, True))
     video_thread.start()
-
-    # Menampilkan tombol stop
     stop_button.pack()
 
-def display_video(video):
-    if not video.isOpened():
-        print("Error membuka file video")
-
-    # mendapatkan lebar dan tinggi frame video untuk penyimpanan yang benar
-    frame_width = int(video.get(3))
-    frame_height = int(video.get(4))
-    # membuat objek `VideoWriter()`
-    out = cv2.VideoWriter(
-        "resources/video_result.mp4",
-        cv2.VideoWriter_fourcc(*"mp4v"),
-        20,
-        (frame_width, frame_height),
-    )
-
-    # Mendapatkan ukuran layar laptop
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
-
-    # Variabel untuk melacak waktu terakhir pembaruan penghitung
-    last_update_time = time.time()
-
-    # Variabel untuk menyimpan angka penghitung terakhir
-    count = 0
-
-    # Membaca dan memproses setiap frame
-    while True:
-        # Memeriksa apakah flag berhenti diatur
-        if stop_flag.is_set():
-            break
-
-        # Membaca frame
-        success, frame = video.read()
-
-        # Memeriksa apakah frame berhasil dibaca
-        if not success:
-            break
-
-        # Mendapatkan dimensi frame
-        (H, W) = frame.shape[:2]
-
-        # Resize frame sesuai ukuran layar laptop
-        scale = min(screen_width / W, screen_height / H)
-        new_size = (int(W * scale), int(H * scale))
-        resized_frame = cv2.resize(frame, new_size)
-
-        # Deteksi objek dengan YOLOv8
-        results = model(resized_frame)
-
-        # Hanya perbarui penghitung jika interval waktu lebih dari 10 detik
-        current_time = time.time()
-        if current_time - last_update_time >= 10:
-            # Reset penghitung
-            count = 0
-            for result in results:
-                for box in result.boxes:
-                    class_id = box.cls
-                    label = class_names[int(class_id)]
-                    # Hanya hitung objek dengan label "person"
-                    if label == "person":
-                        count += 1
-            # Perbarui waktu terakhir
-            last_update_time = current_time
-
-        # Menghitung posisi teks tengah
-        text = f"{count} orang"
-        font_scale = 1
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, 2)
-        position = ((new_size[0] - text_width) // 2, (new_size[1] + text_height) // 2)
-
-        # Menambahkan teks jumlah orang di tengah frame
-        cv2.putText(
-            resized_frame,
-            text,
-            position,
-            font,
-            font_scale,
-            (255, 255, 255),
-            2,
-        )
-
-        # Menampilkan frame
-        cv2.imshow("Output", resized_frame)
-        out.write(resized_frame)
-
-        # Menunggu penekanan tombol
-        key = cv2.waitKey(1) & 0xFF
-
-        # Jika tombol 'q' ditekan, hentikan loop
-        if key == ord("q"):
-            break
-
-    # Melepaskan sumber daya
-    cv2.destroyAllWindows()
-    video.release()
-    out.release()
-
-    # Menyembunyikan tombol stop
+def select_video():
+    global stop_flag
+    stop_flag.clear()
     stop_button.pack_forget()
-    image_label.config(image="")
+    file_path = filedialog.askopenfilename()  # Pilih file video
+    video = cv2.VideoCapture(file_path)
+    video_thread = threading.Thread(target=display_video_feed, args=(video, False))
+    video_thread.start()
+    stop_button.pack()
 
 def stop_video():
-    # Menetapkan flag stop untuk menghentikan tampilan video
-    stop_flag.set()
-
+    stop_flag.set()  # Set flag untuk menghentikan tampilan video
 
 # Inisialisasi pembaruan hitungan
 update_count()
@@ -262,7 +161,6 @@ stop_button.pack(side="left")
 
 # Membuat flag untuk menghentikan thread video
 stop_flag = threading.Event()
-# Menyembunyikan tombol stop di awal
 stop_button.pack_forget()
 
 # Menjalankan loop utama aplikasi
