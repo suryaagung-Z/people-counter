@@ -4,6 +4,7 @@ from tkinter import filedialog
 import cv2
 from ultralytics import YOLO
 import time
+import pygame 
 
 # Memuat model YOLOv8
 model = YOLO("Model/yolov8n.pt")
@@ -13,6 +14,7 @@ with open("Model/COCO_labels.txt", "r") as f:
     class_names = f.read().split("\n")
 
 # Inisialisasi variabel global
+max_people = 5
 count = 0
 display_count = 0
 last_update_time = time.time()
@@ -21,13 +23,25 @@ last_update_time = time.time()
 def update_count():
     global display_count, count, last_update_time
     current_time = time.time()
-    if current_time - last_update_time >= 5:  # Interval 5 detik
-        display_count = count  # Perbarui jumlah orang yang ditampilkan
-        last_update_time = current_time  # Simpan waktu pembaruan terakhir
-    threading.Timer(5, update_count).start()  # Jalankan kembali setelah 5 detik
+    if current_time - last_update_time >= 5:
+        display_count = count
+        last_update_time = current_time
+    threading.Timer(5, update_count).start()
+
+pygame.mixer.init()
+
+def play_sound_continuous():
+    if not pygame.mixer.music.get_busy():
+        pygame.mixer.music.load("assets/beep-warning.mp3")
+        pygame.mixer.music.play(-1)
+
+def stop_sound():
+    pygame.mixer.music.stop()
 
 def display_video_feed(video, is_camera):
     global count
+    blink_state = False  # Variabel untuk mengatur berkedipnya teks
+
     if not video.isOpened():
         print("Error membuka sumber video/kamera.")
         return
@@ -80,23 +94,33 @@ def display_video_feed(video, is_camera):
                         2,
                     )
 
-        count = local_count  # Perbarui penghitung global
+        count = local_count
 
-        # Tambahkan teks jumlah orang di tengah frame
-        text = f"{display_count} orang"
+        if display_count > max_people:
+            text = f"{display_count} people\nMax: {max_people}"
+            play_sound_continuous()
+            text_color = (0, 0, 255) if blink_state else (255, 255, 255)
+            blink_state = not blink_state
+        else:
+            text = f"{display_count} people\nMax: {max_people}"
+            stop_sound()
+            text_color = (255, 255, 255)
+
         font_scale = 1
         font = cv2.FONT_HERSHEY_SIMPLEX
         (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, 2)
         position = ((new_size[0] - text_width) // 2, (new_size[1] + text_height) // 2)
-        cv2.putText(
-            resized_frame,
-            text,
-            position,
-            font,
-            font_scale,
-            (255, 255, 255),
-            2,
-        )
+        for i, line in enumerate(text.split("\n")):
+            y_offset = position[1] + i * (text_height + 10)
+            cv2.putText(
+                resized_frame,
+                line,
+                (position[0], y_offset),
+                font,
+                font_scale,
+                text_color,
+                2,
+            )
 
         cv2.imshow("Output", resized_frame)
         out.write(resized_frame)
@@ -108,6 +132,8 @@ def display_video_feed(video, is_camera):
     video.release()
     out.release()
     cv2.destroyAllWindows()
+    stop_sound()
+
 
 def select_camera():
     global stop_flag
