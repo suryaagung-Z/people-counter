@@ -37,23 +37,13 @@ def play_sound_continuous():
 def stop_sound():
     pygame.mixer.music.stop()
 
-def display_video_feed(video, is_camera):
+def display_video_feed(video):
     global count, confidence_scores
     blink_state = False
 
     if not video.isOpened():
         print("Error membuka sumber video/kamera.")
         return
-
-    # Resolusi frame output
-    frame_width = int(video.get(3))
-    frame_height = int(video.get(4))
-    out = cv2.VideoWriter(
-        "resources/Camera_result.mp4" if is_camera else "resources/Video_result.mp4",
-        cv2.VideoWriter_fourcc(*"mp4v"),
-        20,
-        (frame_width, frame_height),
-    )
 
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
@@ -122,14 +112,12 @@ def display_video_feed(video, is_camera):
             )
 
         cv2.imshow("Output", resized_frame)
-        out.write(resized_frame)
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             break
 
     video.release()
-    out.release()
     cv2.destroyAllWindows()
     stop_sound()
 
@@ -147,7 +135,7 @@ def select_camera():
     stop_flag.clear()
     stop_button.pack_forget()
     video = cv2.VideoCapture(0)
-    video_thread = threading.Thread(target=display_video_feed, args=(video, True))
+    video_thread = threading.Thread(target=display_video_feed, args=(video,))
     video_thread.start()
     stop_button.pack()
 
@@ -157,7 +145,7 @@ def select_video():
     stop_button.pack_forget()
     file_path = filedialog.askopenfilename()
     video = cv2.VideoCapture(file_path)
-    video_thread = threading.Thread(target=display_video_feed, args=(video, False))
+    video_thread = threading.Thread(target=display_video_feed, args=(video,))
     video_thread.start()
     stop_button.pack()
 
