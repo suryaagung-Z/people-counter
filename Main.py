@@ -19,6 +19,9 @@ count = 0
 display_count = 0
 last_update_time = time.time()
 
+# List untuk menyimpan semua confidence score
+confidence_scores = []
+
 # Fungsi untuk memperbarui tampilan jumlah orang setiap 5 detik
 def update_count():
     global display_count, count, last_update_time
@@ -39,7 +42,7 @@ def stop_sound():
     pygame.mixer.music.stop()
 
 def display_video_feed(video, is_camera):
-    global count
+    global count, confidence_scores
     blink_state = False  # Variabel untuk mengatur berkedipnya teks
 
     if not video.isOpened():
@@ -82,6 +85,7 @@ def display_video_feed(video, is_camera):
                 label = class_names[int(class_id)]
                 if label == "person":
                     local_count += 1
+                    confidence_scores.append(float(box.conf))  # Tambahkan confidence score ke list
                     cv2.rectangle(resized_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     y = y1 - 15 if y1 > 15 else y1 + 15
                     cv2.putText(
@@ -134,12 +138,20 @@ def display_video_feed(video, is_camera):
     cv2.destroyAllWindows()
     stop_sound()
 
+    calculate_average_confidence()
+
+def calculate_average_confidence():
+    if len(confidence_scores) > 0:
+        avg_confidence = sum(confidence_scores) / len(confidence_scores)
+        print(f"Rata-rata Confidence Score: {avg_confidence:.2f}")
+    else:
+        print("Tidak ada deteksi untuk menghitung rata-rata confidence score.")
 
 def select_camera():
     global stop_flag
     stop_flag.clear()
     stop_button.pack_forget()
-    video = cv2.VideoCapture(0)  # Buka kamera
+    video = cv2.VideoCapture(0)
     video_thread = threading.Thread(target=display_video_feed, args=(video, True))
     video_thread.start()
     stop_button.pack()
@@ -148,14 +160,15 @@ def select_video():
     global stop_flag
     stop_flag.clear()
     stop_button.pack_forget()
-    file_path = filedialog.askopenfilename()  # Pilih file video
+    file_path = filedialog.askopenfilename()
     video = cv2.VideoCapture(file_path)
     video_thread = threading.Thread(target=display_video_feed, args=(video, False))
     video_thread.start()
     stop_button.pack()
 
 def stop_video():
-    stop_flag.set()  # Set flag untuk menghentikan tampilan video
+    stop_flag.set()
+    calculate_average_confidence()
 
 # Inisialisasi pembaruan hitungan
 update_count()
