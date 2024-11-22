@@ -9,10 +9,6 @@ import pygame
 # Memuat model YOLOv8
 model = YOLO("Model/yolov8n.pt")
 
-# Memuat nama-nama kelas COCO
-with open("Model/COCO_labels.txt", "r") as f:
-    class_names = f.read().split("\n")
-
 # Inisialisasi variabel global
 max_people = 5
 count = 0
@@ -43,7 +39,7 @@ def stop_sound():
 
 def display_video_feed(video, is_camera):
     global count, confidence_scores
-    blink_state = False  # Variabel untuk mengatur berkedipnya teks
+    blink_state = False
 
     if not video.isOpened():
         print("Error membuka sumber video/kamera.")
@@ -81,16 +77,15 @@ def display_video_feed(video, is_camera):
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                class_id = box.cls
-                label = class_names[int(class_id)]
-                if label == "person":
+                class_id = int(box.cls)  # ID kelas
+                if class_id == 0:  # 0 adalah ID untuk "person"
                     local_count += 1
                     confidence_scores.append(float(box.conf))  # Tambahkan confidence score ke list
                     cv2.rectangle(resized_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     y = y1 - 15 if y1 > 15 else y1 + 15
                     cv2.putText(
                         resized_frame,
-                        f"{label}: {float(box.conf):.2f}",
+                        f"person: {float(box.conf):.2f}",
                         (x1, y),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.5,
